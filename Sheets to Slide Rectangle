@@ -1,0 +1,98 @@
+/***** SETTINGS *****/
+const PRESENTATION_ID = 'PASTE_YOUR_SLIDES_ID_HERE';  // e.g. 1AbCDeFgHiJKlmnOPq...
+const SHEET_NAME = 'Sheet1';
+const COLUMN_RANGE = 'A2:A'; // Change to your column/range (A2:A, B2:B, etc.)
+
+// Layout settings for the "many per slide" mode:
+const PER_SLIDE = 12;       // how many text boxes per slide before starting a new slide
+const BOX_WIDTH = 600;      // points (Slides uses points); ~72 points = 1 inch
+const BOX_HEIGHT = 50;      // points
+const LEFT_MARGIN = 60;     // points from left
+const TOP_MARGIN = 60;      // points from top
+const VERTICAL_GAP = 12;    // gap between boxes
+
+/**
+ * Reads values from a column in the active sheet and creates text boxes
+ * in the target Google Slides deck. Choose ONE of the two helper calls:
+ *  - createManyPerSlide_(values)  -> stacked boxes on slides
+ *  - createOnePerSlide_(values)   -> one box per slide
+ */
+function createTextBoxesFromColumn() {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    throw new Error(`Sheet "${SHEET_NAME}" not found.`);
+  }
+
+  // If COLUMN_RANGE is like "A2:A", expand it down to last row automatically
+  const lastRow = sheet.getLastRow();
+  const startA1 = COLUMN_RANGE.split(':')[0]; // e.g. "A2"
+  const colLetter = startA1.replace(/[0-9]/g, ''); // "A"
+  const startRow = Number(startA1.replace(/[A-Z]/gi, '')) || 1;
+  const effectiveA1 = `${colLetter}${startRow}:${colLetter}${lastRow}`;
+
+  const values = sheet.getRange(effectiveA1).getValues()
+    .map(r => (r[0] !== null && r[0] !== undefined) ? String(r[0]).trim() : '')
+    .filter(txt => txt !== ''); // ignore blank cells
+
+  if (values.length === 0) {
+    SpreadsheetApp.getUi().alert('No non-empty cells found in the specified range.');
+    return;
+  }
+
+  const deck = SlidesApp.openById(PRESENTATION_ID);
+
+  // Choose ONE of the two behaviors below:
+
+  // A) Many text boxes per slide (stacked)
+  createManyPerSlide_(deck, values);
+
+  // B) One text box per slide
+  // createOnePerSlide_(deck, values);
+
+  SlidesApp.getUi(); // ensures the authorization flow completes cleanly
+}
+
+/**
+ * Creates multiple text boxes per slide, stacked vertically.
+ */
+function createManyPerSlide_(deck, values) {
+  let slide = deck.getSlides()[0] || deck.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+  let countOnThisSlide = 0;
+  let y = TOP_MARGIN;
+
+  values.forEach((text, i) => {
+    if (countOnThisSlide >= PER_SLIDE) {
+      slide = deck.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+      countOnThisSlide = 0;
+      y = TOP_MARGIN;
+    }
+
+    const shape = slide.insertTextBox(text, LEFT_MARGIN, y, BOX_WIDTH, BOX_HEIGHT);
+    shape.getText().getTextStyle()
+      .setFontFamily('Arial')
+      .setFontSize(18);
+    // Optional: set a border or fill
+    // shape.getLine().setWeight(1);
+    // shape.getFill().setSolidFill('#f5f5f5');
+
+    y += BOX_HEIGHT + VERTICAL_GAP;
+    countOnThisSlide++;
+  });
+}
+
+/**
+ * Creates one text box per slide (each value on its own slide).
+ */
+function createOnePerSlide_(deck, values) {
+  values.forEach((text, i) => {
+    const slide = (i === 0 && deck.getSlides().length > 0)
+      ? deck.getSlides()[0]
+      : deck.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+
+    const shape = slide.insertTextBox(text, LEFT_MARGIN, TOP_MARGIN, BOX_WIDTH, BOX_HEIGHT);
+    shape.getText().getTextStyle()
+      .setFontFamily('Arial')
+      .setFontSize(32)
+      .setBold(true);
+  });
+}
